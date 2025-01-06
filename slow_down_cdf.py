@@ -1,11 +1,13 @@
 import numpy as np
-import cPickle
+import pickle
 import matplotlib.pyplot as plt
 
 import environment
 import parameters
-import pg_network
+# import pg_network
 import other_agents
+from RLBrain_Tensorflow import Policy_gradient as RL_brain
+# from RLBrain_Tensorflow import Actor_Critic as RL_brain
 
 
 def discount(x, gamma):
@@ -15,7 +17,7 @@ def discount(x, gamma):
     """
     out = np.zeros(len(x))
     out[-1] = x[-1]
-    for i in reversed(xrange(len(x)-1)):
+    for i in reversed(range(len(x)-1)):
         out[i] = x[i] + gamma*out[i+1]
     assert x.ndim >= 1
     # More efficient version:
@@ -41,21 +43,25 @@ def get_traj(test_type, pa, env, episode_max_length, pg_resume=None, render=Fals
 
     if test_type == 'PG':  # load trained parameters
 
-        pg_learner = pg_network.PGLearner(pa)
+        # pg_learner = pg_network.PGLearner(pa)
+        rl = RL_brain.PolicyGradient(n_actions=pa.network_output_dim,
+                                     n_features=pa.network_input_width * pa.network_input_height,
+                                     learning_rate=0.02)
+        rl.load_data(pg_resume)
 
-        net_handle = open(pg_resume, 'rb')
-        net_params = cPickle.load(net_handle)
-        pg_learner.set_net_params(net_params)
+        # net_handle = open(pg_resume, 'rb')
+        # net_params = pickle.load(net_handle)
+        # pg_learner.set_net_params(net_params)
 
     env.reset()
     rews = []
 
     ob = env.observe()
 
-    for _ in xrange(episode_max_length):
+    for _ in range(episode_max_length):
 
         if test_type == 'PG':
-            a = pg_learner.choose_action(ob)
+            a = rl.choose_action(ob)
 
         elif test_type == 'Tetris':
             a = other_agents.get_packer_action(env.machine, env.job_slot)
@@ -105,7 +111,7 @@ def launch(pa, pg_resume=None, render=False, plot=False, repre='image', end='no_
         num_job_remain[test_type] = []
         job_remain_delay[test_type] = []
 
-    for seq_idx in xrange(pa.num_ex):
+    for seq_idx in range(pa.num_ex):
         print('\n\n')
         print("=============== " + str(seq_idx) + " ===============")
 
@@ -113,9 +119,9 @@ def launch(pa, pg_resume=None, render=False, plot=False, repre='image', end='no_
 
             rews, info = get_traj(test_type, pa, env, pa.episode_max_length, pg_resume)
 
-            print "---------- " + test_type + " -----------"
+            print("---------- " + test_type + " -----------")
 
-            print "total discount reward : \t %s" % (discount(rews, pa.discount)[0])
+            print("total discount reward : \t %s" % (discount(rews, pa.discount)[0]))
 
             all_discount_rews[test_type].append(
                 discount(rews, pa.discount)[0]
@@ -125,10 +131,10 @@ def launch(pa, pg_resume=None, render=False, plot=False, repre='image', end='no_
             # ---- per job stat ----
             # ------------------------
 
-            enter_time = np.array([info.record[i].enter_time for i in xrange(len(info.record))])
-            finish_time = np.array([info.record[i].finish_time for i in xrange(len(info.record))])
-            job_len = np.array([info.record[i].len for i in xrange(len(info.record))])
-            job_total_size = np.array([np.sum(info.record[i].res_vec) for i in xrange(len(info.record))])
+            enter_time = np.array([info.record[i].enter_time for i in range(len(info.record))])
+            finish_time = np.array([info.record[i].finish_time for i in range(len(info.record))])
+            job_len = np.array([info.record[i].len for i in range(len(info.record))])
+            job_total_size = np.array([np.sum(info.record[i].res_vec) for i in range(len(info.record))])
 
             finished_idx = (finish_time >= 0)
             unfinished_idx = (finish_time < 0)

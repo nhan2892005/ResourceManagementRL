@@ -7,7 +7,7 @@ matplotlib.use('Agg')
 
 import parameters
 import pg_re
-import pg_su
+
 import slow_down_cdf
 
 
@@ -45,6 +45,7 @@ def main():
     type_exp = 'pg_re'  # 'pg_su' 'pg_su_compact' 'v_su', 'pg_v_re', 'pg_re', q_re', 'test'
 
     pg_resume = None
+    # pg_resume = 'data/tmp_300.ckpt'
     v_resume = None
     q_resume = None
     log = None
@@ -141,19 +142,10 @@ def main():
 
     pa.compute_dependent_parameters()
 
-    if type_exp == 'pg_su':
-        pg_su.launch(pa, pg_resume, render, repre='image', end='all_done')
-    elif type_exp == 'v_su':
-        v_su.launch(pa, v_resume, render)
-    elif type_exp == 'pg_re':
+    if type_exp == 'pg_re':
         pg_re.launch(pa, pg_resume, render, repre='image', end='all_done')
-    elif type_exp == 'pg_v_re':
-        pg_v_re.launch(pa, pg_resume, v_resume, render)
     elif type_exp == 'test':
-        # quick_test.launch(pa, pg_resume, render)
         slow_down_cdf.launch(pa, pg_resume, render, True)
-    # elif type_exp == 'q_re':
-    #     q_re.launch(pa, q_resume, render)
     else:
         print("Error: unkown experiment type " + str(type_exp))
         exit(1)
