@@ -5,7 +5,6 @@ import environment
 import job_distribution
 import slow_down_cdf
 from RLBrain_Tensorflow import Policy_gradient as RL_brain
-# from RLBrain_Tensorflow import Actor_Critic as RL_brain
 
 def init_accums(pg_learner):  # in rmsprop
     accums = []
@@ -35,8 +34,6 @@ def discount(x, gamma):
     for i in reversed(range(len(x)-1)):
         out[i] = x[i] + gamma*out[i+1]
     assert x.ndim >= 1
-    # More efficient version:
-    # scipy.signal.lfilter([1],[1,-gamma],x[::-1], axis=0)[::-1]
     return out
 
 
@@ -63,34 +60,35 @@ def get_traj(agent, env, episode_max_length):
 
         ob_, rew, done, info = env.step(a, repeat=True)
 
-        # agent.store_transition(ob, a, rew)
-
         rews.append(rew)
 
         if done:
-
-            # loss = agent.learn()
             break
 
         ob = ob_
-
-    # loss = agent.learn()
 
     return {'reward': np.array(rews),
             'ob': np.array(obs),
             'action': np.array(acts),
             'info': info,
-            # 'loss': loss
             }
 
-def concatenate_all_ob(trajs, pa):
+def concatenate_all_ob(trajs, pa, repre='image'):
 
     timesteps_total = 0
     for i in range(len(trajs)):
         timesteps_total += len(trajs[i]['reward'])
 
+    # Determine feature dimension based on representation type
+    if repre == 'image':
+        obs_dim = pa.network_input_height * pa.network_input_width
+    elif repre == 'feature_extract':
+        obs_dim = pa.network_feature_dim
+    else:
+        obs_dim = pa.network_compact_dim
+
     all_ob = np.zeros(
-        (timesteps_total, pa.network_input_height*pa.network_input_width),
+        (timesteps_total, obs_dim),
         dtype=np.float64)
 
     timesteps = 0
@@ -151,7 +149,7 @@ def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_
     plt.savefig(output_file_prefix + "_lr_curve" + ".pdf")
 
 
-def get_traj_worker(rl, env, pa):
+def get_traj_worker(rl, env, pa, repre='image'):
 
     trajs = []
 
@@ -159,7 +157,7 @@ def get_traj_worker(rl, env, pa):
         traj = get_traj(rl, env, pa.episode_max_length)
         trajs.append(traj)
 
-    all_ob = concatenate_all_ob(trajs, pa)
+    all_ob = concatenate_all_ob(trajs, pa, repre)
 
     # Compute discounted sums of rewards
     rets = [discount(traj["reward"], pa.discount) for traj in trajs]
@@ -176,7 +174,6 @@ def get_traj_worker(rl, env, pa):
 
     all_eprews = np.array([discount(traj["reward"], pa.discount)[0] for traj in trajs])  # episode total rewards
     all_eplens = np.array([len(traj["reward"]) for traj in trajs])  # episode lengths
-    # all_loss = np.array([traj["loss"] for traj in trajs])
 
     # All Job Stat
     enter_time, finish_time, job_len = process_all_info(trajs)
@@ -190,6 +187,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     # ----------------------------
     print("Preparing for workers...")
+    print("Representation type:", repre)
     # ----------------------------
 
     pg_learners = []
@@ -208,25 +206,28 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     print("-prepare for worker-")
 
+    # Determine input dimension based on representation type
+    if repre == 'image':
+        n_features = pa.network_input_height * pa.network_input_width
+        print(f"Image representation: {pa.network_input_height} x {pa.network_input_width} = {n_features} features")
+    elif repre == 'feature_extract':
+        n_features = pa.network_feature_dim
+        print(f"Feature extraction representation: {n_features} features")
+        print(f"  - Resource features: {pa.num_res * 5}")
+        print(f"  - Job slot features: {pa.num_nw * (pa.num_res + 4)}")
+        print(f"  - Backlog features: 3")
+        print(f"  - Running features: 2")
+        print(f"  - Temporal features: 2")
+    else:
+        n_features = pa.network_compact_dim
+        print(f"Compact representation: {n_features} features")
+
     rl = RL_brain.PolicyGradient(n_actions=pa.network_output_dim,
-                                 #network_input_height=pa.network_input_height,
-                                 #network_input_width=pa.network_input_width,
-                                 n_features=pa.network_input_height*pa.network_input_width,
+                                 n_features=n_features,
                                  learning_rate=0.02)
-
-    # pg_learner = pg_network.PGLearner(pa)
-
-    # if pg_resume is not None:
-    # net_handle = open(pg_resume, 'rb')
-    # net_params = cPickle.load(net_handle)
-    # pg_learner.set_net_params(net_params)
-
-    # pg_learners.append(pg_learner)
 
     if pg_resume is not None:
         rl.load_data(pg_resume)
-
-    # accums = init_accums(pg_learners[pa.batch_size])
 
     # --------------------------------------
     print("Preparing for reference data...")
@@ -264,7 +265,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
             ex_idx = ex_indices[ex]
 
-            eprew, eplen, slowdown, all_ob, all_action, all_adv = get_traj_worker(rl, envs[ex_idx], pa)
+            eprew, eplen, slowdown, all_ob, all_action, all_adv = get_traj_worker(rl, envs[ex_idx], pa, repre)
             eprewlist.append(eprew)
             eplenlist.append(eplen)
             slowdownlist.append(slowdown)
@@ -278,28 +279,6 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
                 print("\n\n")
 
                 ex_counter = 0
-
-                # all_eprews.extend([r["all_eprews"] for r in result])
-
-                # eprews.extend(np.concatenate([r["all_eprews"] for r in result]))  # episode total rewards
-                # eplens.extend(np.concatenate([r["all_eplens"] for r in result]))  # episode lengths
-
-                # all_slowdown.extend(np.concatenate([r["all_slowdown"] for r in result]))
-
-                # assemble gradients
-                # grads = grads_all[0]
-                # for i in range(1, len(grads_all)):
-                # for j in range(len(grads)):
-                # grads[j] += grads_all[i][j]
-
-                # propagate network parameters to others
-                # params = pg_learners[pa.batch_size].get_params()
-
-                # rmsprop_updates_outside(grads, params, accums, pa.lr_rate, pa.rms_rho, pa.rms_eps)
-
-                # for i in range(pa.batch_size + 1):
-                # pg_learners[i].set_net_params(params)
-
 
         timer_end = time.time()
 
@@ -326,10 +305,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
             rl.save_data(pa.output_filename + '_' + str(iteration))
 
             pa.unseen = True
-            # slow_down_cdf.launch(pa, pa.output_filename + '_' + str(iteration) + '.ckpt',
-                                # render=False, plot=True, repre=repre, end=end)
             pa.unseen = False
-            # test on unseen examples
 
             plot_lr_curve(pa.output_filename,
                           max_rew_lr_curve, mean_rew_lr_curve, slow_down_lr_curve,
@@ -342,27 +318,25 @@ def main():
 
     pa = parameters.Parameters()
 
-    pa.simu_len = 50  # 1000
-    pa.num_ex = 50  # 100
+    pa.simu_len = 50
+    pa.num_ex = 50
     pa.num_nw = 10
     pa.num_seq_per_batch = 20
     pa.output_freq = 50
     pa.batch_size = 10
 
-    # pa.max_nw_size = 5
-    # pa.job_len = 5
     pa.new_job_rate = 0.3
 
-    pa.episode_max_length = 2000  # 2000
+    pa.episode_max_length = 2000
 
     pa.compute_dependent_parameters()
 
     pg_resume = None
-    # pg_resume = 'data/tmp_450.pkl'
 
     render = False
 
-    launch(pa, pg_resume, render, repre='image', end='all_done')
+    # Test with feature extraction
+    launch(pa, pg_resume, render, repre='feature_extract', end='all_done')
 
 
 if __name__ == '__main__':

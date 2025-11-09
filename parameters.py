@@ -51,6 +51,8 @@ class Parameters:
         self.network_compact_dim = (self.num_res + 1) * \
             (self.time_horizon + self.num_nw) + 1  # + 1 for backlog indicator
 
+        self._compute_feature_dim()
+
         self.network_output_dim = self.num_nw + 1  # + 1 for void action
 
         self.delay_penalty = -1       # penalty for delaying things in the current work screen
@@ -68,6 +70,34 @@ class Parameters:
         self.batch_size = 10
         self.evaluate_policy_name = "SJF"
 
+    def _compute_feature_dim(self):
+        """
+        Compute the dimension of feature extraction representation
+        
+        Feature breakdown:
+        - Resource features: num_res * 5 features per resource
+          (total_capacity, available, used, num_jobs, near_future_util)
+        - Job slot features: num_nw * (num_res + 4) features per slot
+          (res_vec for each resource, len, total_demand, wait_time, can_schedule)
+        - Backlog features: 3 features
+          (size, avg_res_demand, avg_len)
+        - Running jobs features: 2 features
+          (num_running, avg_remaining_time)
+        - Temporal features: 2 features
+          (time_since_last_job, sim_progress)
+        """
+        resource_features = self.num_res * 5
+        job_slot_features = self.num_nw * (self.num_res + 4)
+        backlog_features = 3
+        running_features = 2
+        temporal_features = 2
+        
+        self.network_feature_dim = (resource_features + 
+                                   job_slot_features + 
+                                   backlog_features + 
+                                   running_features + 
+                                   temporal_features)
+
     def compute_dependent_parameters(self):
         assert self.backlog_size % self.time_horizon == 0  # such that it can be converted into an image
         self.backlog_width = self.backlog_size / self.time_horizon
@@ -80,4 +110,6 @@ class Parameters:
         self.network_compact_dim = (self.num_res + 1) * \
             (self.time_horizon + self.num_nw) + 1  # + 1 for backlog indicator
 
+        # recompute feature dimension
+        self._compute_feature_dim()
         self.network_output_dim = self.num_nw + 1  # + 1 for void action
