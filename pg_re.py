@@ -126,7 +126,7 @@ def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_
     fig = plt.figure(figsize=(12, 5))
 
     ax = fig.add_subplot(121)
-    ax.set_color_cycle([cm(1. * i / num_colors) for i in range(num_colors)])
+    ax.set_prop_cycle(color=[cm(1. * i / num_colors) for i in range(num_colors)])
 
     ax.plot(mean_rew_lr_curve, linewidth=2, label='PG mean')
     for k in ref_discount_rews:
@@ -138,7 +138,7 @@ def plot_lr_curve(output_file_prefix, max_rew_lr_curve, mean_rew_lr_curve, slow_
     plt.ylabel("Discounted Total Reward", fontsize=20)
 
     ax = fig.add_subplot(122)
-    ax.set_color_cycle([cm(1. * i / num_colors) for i in range(num_colors)])
+    ax.set_prop_cycle(color=[cm(1. * i / num_colors) for i in range(num_colors)])
 
     ax.plot(slow_down_lr_curve, linewidth=2, label='PG mean')
     for k in ref_discount_rews:

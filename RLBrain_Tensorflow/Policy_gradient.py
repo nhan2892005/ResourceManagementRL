@@ -63,7 +63,7 @@ class PolicyGradient:
 
     def choose_action(self, observation):
         #observation = np.expand_dims(observation, axis=0)  # Add batch dimension
-        prob_weights = self.model.predict(observation)
+        prob_weights = self.model.predict(observation, verbose=0)
         action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # Select action based on probabilities
         return action
 
@@ -112,7 +112,7 @@ class PolicyGradient:
         return discounted_ep_rs
 
     def save_data(self, path):
-        self.model.save_weights(path)
+        self.model.save_weights(f'{path}.weights.h5')
 
     def load_data(self, path):
-        self.model.load_weights(path)
+        self.model.load_weights(f'{path}.weights.h5')
