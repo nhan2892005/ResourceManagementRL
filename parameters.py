@@ -98,6 +98,29 @@ class Parameters:
                                    running_features + 
                                    temporal_features)
 
+    def _compute_text_dim(self):
+        """
+        Compute the dimension of text-based representation
+        
+        Text descriptions:
+        1. Cluster resources: 1 description
+        2. Job slots: num_nw descriptions (one per slot)
+        3. Backlog: 1 description
+        4. Running jobs: 1 description
+        5. Temporal info: 1 description
+        
+        Total: (1 + num_nw + 1 + 1 + 1) = num_nw + 4 descriptions
+        
+        Each description is encoded to 384-dimensional vector by all-MiniLM-L6-v2
+        So total dimension = (num_nw + 4) * 384
+        """
+        # SentenceTransformer all-MiniLM-L6-v2 produces 384-dim embeddings
+        embedding_dim = 384
+        num_descriptions = self.num_nw + 4  # cluster + num_nw slots + backlog + running + temporal
+        
+        self.network_text_dim = num_descriptions * embedding_dim
+        print(f"Text representation: {num_descriptions} descriptions x {embedding_dim}D = {self.network_text_dim} features")
+
     def compute_dependent_parameters(self):
         assert self.backlog_size % self.time_horizon == 0  # such that it can be converted into an image
         self.backlog_width = self.backlog_size / self.time_horizon
@@ -112,4 +135,5 @@ class Parameters:
 
         # recompute feature dimension
         self._compute_feature_dim()
+        self._compute_text_dim()
         self.network_output_dim = self.num_nw + 1  # + 1 for void action

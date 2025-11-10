@@ -84,6 +84,8 @@ def concatenate_all_ob(trajs, pa, repre='image'):
         obs_dim = pa.network_input_height * pa.network_input_width
     elif repre == 'feature_extract':
         obs_dim = pa.network_feature_dim
+    elif repre == 'text':
+        obs_dim = pa.network_text_dim
     else:
         obs_dim = pa.network_compact_dim
 
@@ -218,6 +220,14 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
         print(f"  - Backlog features: 3")
         print(f"  - Running features: 2")
         print(f"  - Temporal features: 2")
+    elif repre == 'text':
+        n_features = pa.network_text_dim
+        num_desc = pa.num_nw + 4
+        embedding_dim = 384
+        print(f"Text representation: {n_features} features")
+        print(f"  - Number of descriptions: {num_desc}")
+        print(f"  - Embedding dimension: {embedding_dim}")
+        print(f"  - Total: {num_desc} x {embedding_dim} = {n_features}")
     else:
         n_features = pa.network_compact_dim
         print(f"Compact representation: {n_features} features")
@@ -335,8 +345,8 @@ def main():
 
     render = False
 
-    # Test with feature extraction
-    launch(pa, pg_resume, render, repre='feature_extract', end='all_done')
+    print("\n=== Testing Text Representation ===")
+    launch(pa, pg_resume, render, repre='text', end='all_done')
 
 
 if __name__ == '__main__':
