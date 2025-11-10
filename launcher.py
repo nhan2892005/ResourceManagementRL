@@ -35,7 +35,8 @@ def script_usage():
           '--ofile <output file name> \n'
           '--log <log file name> \n'
           '--render <plot dynamics> \n'
-          '--unseen <generate unseen example> \n')
+          '--unseen <generate unseen example> \n'
+          '--repre <image|feat_extract>\n')
 
 
 def main():
@@ -49,7 +50,7 @@ def main():
     v_resume = None
     q_resume = None
     log = None
-
+    repre = "image"
     render = False
 
     try:
@@ -78,13 +79,15 @@ def main():
                       "ofile=",
                       "log=",
                       "render=",
-                      "unseen="])
+                      "unseen=",
+                      "repre="])
 
     except getopt.GetoptError:
         script_usage()
         sys.exit(2)
 
     for opt, arg in opts:
+        print(f'{opt}, {arg}')
         if opt == '-h':
             script_usage()
             sys.exit()
@@ -136,6 +139,8 @@ def main():
             render = (arg == 'True')
         elif opt in ("-u", "--unseen"):
             pa.generate_unseen = (arg == 'True')
+        elif opt in ("-repr", "--repre"):
+            repre = str(arg)
         else:
             script_usage()
             sys.exit()
@@ -143,7 +148,7 @@ def main():
     pa.compute_dependent_parameters()
 
     if type_exp == 'pg_re':
-        pg_re.launch(pa, pg_resume, render, repre='image', end='all_done')
+        pg_re.launch(pa, pg_resume, render, repre=repre, end='all_done')
     elif type_exp == 'test':
         slow_down_cdf.launch(pa, pg_resume, render, True)
     else:
