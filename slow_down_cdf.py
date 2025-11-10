@@ -6,7 +6,7 @@ import environment
 import parameters
 # import pg_network
 import other_agents
-from RLBrain_Tensorflow import Policy_gradient as RL_brain
+from RLBrain_Pytorch import Policy_gradient as RL_brain
 # from RLBrain_Tensorflow import Actor_Critic as RL_brain
 
 

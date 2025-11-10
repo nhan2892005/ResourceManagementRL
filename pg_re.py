@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import environment
 import job_distribution
 import slow_down_cdf
-from RLBrain_Tensorflow import Policy_gradient as RL_brain
+from RLBrain_Pytorch import Policy_gradient as RL_brain
 
 def init_accums(pg_learner):  # in rmsprop
     accums = []
