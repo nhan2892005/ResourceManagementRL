@@ -48,18 +48,18 @@ The default variables are defined in `parameters.py`.
 
 
 Example: 
-  - launch supervised learning for policy estimation 
+  - launch policy gradient with state representation using image-like structure
   
   ```
-  python launcher.py --exp_type=pg_su --simu_len=50 --num_ex=1000 --ofile=data/pg_su --out_freq=10 
+  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_image --repre=image > log_pg_image.txt
   ```
-  - launch policy gradient using network parameter just obtained
+  - launch policy gradient with state representation using resource and job slot vectors
   
   ```
-  python launcher.py --exp_type=pg_re --pg_re=data/pg_su_net_file_20.pkl --simu_len=50 --num_ex=10 --ofile=data/pg_re
+  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_feat --repre=feat_extract > log_pg_feat.txt
   ```
-  - launch testing and comparing experiemnt on unseen examples with pg agent just trained
+  - launch policy gradient with state representation using text description
   
   ```
-  python launcher.py --exp_type=test --simu_len=50 --num_ex=10 --pg_re=data/pg_re_1600.pkl --unseen=True
+  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_text --repre=text > log_pg_text.txt
   ```
