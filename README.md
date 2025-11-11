@@ -51,15 +51,15 @@ Example:
   - launch policy gradient with state representation using image-like structure
   
   ```
-  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_image --repre=image > log_pg_image.txt
+  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_image --repre=image
   ```
   - launch policy gradient with state representation using resource and job slot vectors
   
   ```
-  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_feat --repre=feat_extract > log_pg_feat.txt
+  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_feat --repre=feat_extract
   ```
   - launch policy gradient with state representation using text description
   
   ```
-  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_text --repre=text > log_pg_text.txt
+  python launcher.py --exp_type=pg_re --simu_len=50 --num_ex=10 --ofile=data/pg_text --repre=text
   ```
