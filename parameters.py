@@ -102,24 +102,32 @@ class Parameters:
         """
         Compute the dimension of text-based representation
         
-        Text descriptions:
-        1. Cluster resources: 1 description
-        2. Job slots: num_nw descriptions (one per slot)
-        3. Backlog: 1 description
-        4. Running jobs: 1 description
-        5. Temporal info: 1 description
+        Each part is encoded separately by SentenceTransformer:
+        1. Cluster resources: 1 embedding
+        2. Job slots: num_nw embeddings (one per slot)
+        3. Backlog: 1 embedding
+        4. Running jobs: 1 embedding
+        5. Temporal info: 1 embedding
         
-        Total: (1 + num_nw + 1 + 1 + 1) = num_nw + 4 descriptions
+        Total embeddings: 1 + num_nw + 1 + 1 + 1 = num_nw + 4
         
-        Each description is encoded to 384-dimensional vector by all-MiniLM-L6-v2
-        So total dimension = (num_nw + 4) * 384
+        Each embedding from all-MiniLM-L6-v2 is 384-dimensional
+        Total dimension = (num_nw + 4) * 384
         """
         # SentenceTransformer all-MiniLM-L6-v2 produces 384-dim embeddings
         embedding_dim = 384
-        num_descriptions = self.num_nw + 4  # cluster + num_nw slots + backlog + running + temporal
+        num_parts = 1 + self.num_nw + 1 + 1 + 1  # cluster + slots + backlog + running + temporal
         
-        self.network_text_dim = num_descriptions * embedding_dim
-        print(f"Text representation: {num_descriptions} descriptions x {embedding_dim}D = {self.network_text_dim} features")
+        self.network_text_dim = num_parts * embedding_dim
+        
+        print(f"Text representation breakdown:")
+        print(f"  - 1 cluster resource part: {embedding_dim}D")
+        print(f"  - {self.num_nw} job slot parts: {self.num_nw} × {embedding_dim}D")
+        print(f"  - 1 backlog part: {embedding_dim}D")
+        print(f"  - 1 running jobs part: {embedding_dim}D")
+        print(f"  - 1 temporal part: {embedding_dim}D")
+        print(f"  Total parts: {num_parts}")
+        print(f"  Total dimension: {self.network_text_dim}D")
 
     def compute_dependent_parameters(self):
         assert self.backlog_size % self.time_horizon == 0  # such that it can be converted into an image
