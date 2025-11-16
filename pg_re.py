@@ -86,6 +86,8 @@ def concatenate_all_ob(trajs, pa, repre='image'):
         obs_dim = pa.network_feature_dim
     elif repre == 'text':
         obs_dim = pa.network_text_dim
+    elif repre == 'semi_text':
+        obs_dim = pa.network_semi_text_dim
     else:
         obs_dim = pa.network_compact_dim
 
@@ -208,7 +210,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     print("-prepare for worker-")
 
-    # Determine input dimension based on representation type
+    # Determine feature dimension based on representation type
     if repre == 'image':
         n_features = pa.network_input_height * pa.network_input_width
         print(f"Image representation: {pa.network_input_height} x {pa.network_input_width} = {n_features} features")
@@ -228,6 +230,16 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
         print(f"  - Number of descriptions: {num_desc}")
         print(f"  - Embedding dimension: {embedding_dim}")
         print(f"  - Total: {num_desc} x {embedding_dim} = {n_features}")
+    elif repre == 'semi_text':
+        n_features = pa.network_semi_text_dim
+        numerical_dims = (pa.num_res * 3 +
+                         pa.num_nw * (pa.num_res + 3) +
+                         1 + 1 + 2)
+        text_dims = (pa.num_nw + 3) * 384
+        print(f"Semi-text (hybrid) representation: {n_features} features")
+        print(f"  - Numerical features: {numerical_dims}D")
+        print(f"  - Text embeddings: {text_dims}D ({pa.num_nw + 3} parts × 384D)")
+        print(f"  - Total: {numerical_dims} + {text_dims} = {n_features}")
     else:
         n_features = pa.network_compact_dim
         print(f"Compact representation: {n_features} features")

@@ -2,6 +2,7 @@ import numpy as np
 import math
 import matplotlib.pyplot as plt
 from text_observe_representation import TextObservationEncoder
+from semi_text_observe_representation import SemiTextObservationEncoder
 
 import parameters
 
@@ -12,12 +13,16 @@ class Env:
 
         self.pa = pa
         self.render = render
-        self.repre = repre  # image, feature_extract, text representation
+        self.repre = repre  # image, feature_extract, text, semi_text
         self.end = end  # termination type, 'no_new_job' or 'all_done'
 
         if self.repre == 'text':
             self.text_encoder = TextObservationEncoder()
             print(f"Text encoder initialized with {self.text_encoder.embedding_dim}D embeddings")
+        
+        if self.repre == 'semi_text':
+            self.semi_text_encoder = SemiTextObservationEncoder()
+            print(f"Semi-text encoder initialized with {self.semi_text_encoder.embedding_dim}D text embeddings")
 
         self.nw_dist = pa.dist.bi_model_dist
 
@@ -86,12 +91,18 @@ class Env:
             return self._observe_feature_extract()
         elif self.repre == 'text':
             return self._observe_text()
+        elif self.repre == 'semi_text':
+            return self._observe_semi_text()
         else:
             raise ValueError(f"Unknown representation type: {self.repre}")
     
     def _observe_text(self):
         """Text-based observation using SentenceTransformer"""
         return self.text_encoder.encode_state(self)
+    
+    def _observe_semi_text(self):
+        """Semi-text observation using hybrid numerical + text embeddings"""
+        return self.semi_text_encoder.encode_state(self)
 
     def _observe_image(self):
         """Original image-based observation"""

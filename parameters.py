@@ -128,6 +128,51 @@ class Parameters:
         print(f"  - 1 temporal part: {embedding_dim}D")
         print(f"  Total parts: {num_parts}")
         print(f"  Total dimension: {self.network_text_dim}D")
+    
+    def _compute_semi_text_dim(self):
+        """
+        Compute the dimension of semi-text (hybrid) representation
+        
+        Combines numerical features and text embeddings:
+        
+        NUMERICAL FEATURES:
+        - Resource: num_res * 3 (availability, utilization, num_jobs)
+        - Job slots: num_nw * (num_res + 3)
+        - Backlog: 1
+        - Running: 1
+        - Temporal: 2
+        
+        TEXT EMBEDDINGS (no cache):
+        - Backlog: 1 * 384D
+        - Running jobs: 1 * 384D
+        - Job slots: num_nw * 384D
+        - Temporal: 1 * 384D
+        Total text parts: (num_nw + 3) * 384D
+        """
+        embedding_dim = 384
+        
+        # Numerical features
+        numerical_dims = (self.num_res * 3 +
+                         self.num_nw * (self.num_res + 3) +
+                         1 +  # backlog
+                         1 +  # running
+                         2)   # temporal
+        
+        # Text embeddings
+        num_text_parts = 2 + self.num_nw + 1  # backlog + running + job_slots + temporal
+        text_dims = num_text_parts * embedding_dim
+        
+        self.network_semi_text_dim = numerical_dims + text_dims
+        
+        print(f"\nSemi-Text (Hybrid) representation breakdown:")
+        print(f"  Numerical features: {numerical_dims}D")
+        print(f"    - Resource: {self.num_res} × 3 = {self.num_res * 3}D")
+        print(f"    - Job slots: {self.num_nw} × ({self.num_res} + 3) = {self.num_nw * (self.num_res + 3)}D")
+        print(f"    - Backlog: 1D")
+        print(f"    - Running: 1D")
+        print(f"    - Temporal: 2D")
+        print(f"  Text embeddings: {text_dims}D ({num_text_parts} parts × {embedding_dim}D each)")
+        print(f"  Total dimension: {self.network_semi_text_dim}D")
 
     def compute_dependent_parameters(self):
         assert self.backlog_size % self.time_horizon == 0  # such that it can be converted into an image
@@ -144,4 +189,5 @@ class Parameters:
         # recompute feature dimension
         self._compute_feature_dim()
         self._compute_text_dim()
+        self._compute_semi_text_dim()
         self.network_output_dim = self.num_nw + 1  # + 1 for void action
