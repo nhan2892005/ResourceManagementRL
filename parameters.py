@@ -100,34 +100,37 @@ class Parameters:
 
     def _compute_text_dim(self):
         """
-        Compute the dimension of text-based representation
+        Compute the dimension of text-based representation using all-mpnet-base-v2
         
-        Each part is encoded separately by SentenceTransformer:
-        1. Cluster resources: 1 embedding
-        2. Job slots: num_nw embeddings (one per slot)
-        3. Backlog: 1 embedding
-        4. Running jobs: 1 embedding
-        5. Temporal info: 1 embedding
+        State is encoded as 4 comprehensive prompts:
+        1. Cluster resources (overall resource state)
+        2. Job queue (all visible job slots combined)
+        3. System load (backlog + running jobs)
+        4. Temporal information (time context)
         
-        Total embeddings: 1 + num_nw + 1 + 1 + 1 = num_nw + 4
-        
-        Each embedding from all-MiniLM-L6-v2 is 384-dimensional
-        Total dimension = (num_nw + 4) * 384
+        Model: all-mpnet-base-v2
+        Embedding dimension: 768D per prompt
+        Total dimension = 4 * 768 = 3072D
         """
-        # SentenceTransformer all-MiniLM-L6-v2 produces 384-dim embeddings
-        embedding_dim = 384
-        num_parts = 1 + self.num_nw + 1 + 1 + 1  # cluster + slots + backlog + running + temporal
+        # all-mpnet-base-v2 produces 768-dimensional embeddings
+        embedding_dim = 768
+        num_prompts = 4
         
-        self.network_text_dim = num_parts * embedding_dim
+        self.network_text_dim = num_prompts * embedding_dim
         
-        print(f"Text representation breakdown:")
-        print(f"  - 1 cluster resource part: {embedding_dim}D")
-        print(f"  - {self.num_nw} job slot parts: {self.num_nw} × {embedding_dim}D")
-        print(f"  - 1 backlog part: {embedding_dim}D")
-        print(f"  - 1 running jobs part: {embedding_dim}D")
-        print(f"  - 1 temporal part: {embedding_dim}D")
-        print(f"  Total parts: {num_parts}")
-        print(f"  Total dimension: {self.network_text_dim}D")
+        print(f"\n{'='*60}")
+        print(f"Text Representation Configuration")
+        print(f"{'='*60}")
+        print(f"Model: all-mpnet-base-v2")
+        print(f"Embedding dimension per prompt: {embedding_dim}D")
+        print(f"\nPrompt structure:")
+        print(f"  1. Cluster resources       : {embedding_dim}D")
+        print(f"  2. Job queue (all slots)   : {embedding_dim}D")
+        print(f"  3. System load (backlog+run): {embedding_dim}D")
+        print(f"  4. Temporal information    : {embedding_dim}D")
+        print(f"\nTotal prompts: {num_prompts}")
+        print(f"Total dimension: {self.network_text_dim}D")
+        print(f"{'='*60}")
     
     def _compute_semi_text_dim(self):
         """
@@ -142,14 +145,14 @@ class Parameters:
         - Running: 1
         - Temporal: 2
         
-        TEXT EMBEDDINGS (no cache):
-        - Backlog: 1 * 384D
-        - Running jobs: 1 * 384D
-        - Job slots: num_nw * 384D
-        - Temporal: 1 * 384D
-        Total text parts: (num_nw + 3) * 384D
+        TEXT EMBEDDINGS (using all-mpnet-base-v2, 768D):
+        - Backlog: 1 * 768D
+        - Running jobs: 1 * 768D
+        - Job slots: num_nw * 768D
+        - Temporal: 1 * 768D
+        Total text parts: (num_nw + 3) * 768D
         """
-        embedding_dim = 384
+        embedding_dim = 768  # all-mpnet-base-v2
         
         # Numerical features
         numerical_dims = (self.num_res * 3 +
@@ -164,15 +167,20 @@ class Parameters:
         
         self.network_semi_text_dim = numerical_dims + text_dims
         
-        print(f"\nSemi-Text (Hybrid) representation breakdown:")
-        print(f"  Numerical features: {numerical_dims}D")
-        print(f"    - Resource: {self.num_res} × 3 = {self.num_res * 3}D")
-        print(f"    - Job slots: {self.num_nw} × ({self.num_res} + 3) = {self.num_nw * (self.num_res + 3)}D")
-        print(f"    - Backlog: 1D")
-        print(f"    - Running: 1D")
-        print(f"    - Temporal: 2D")
-        print(f"  Text embeddings: {text_dims}D ({num_text_parts} parts × {embedding_dim}D each)")
-        print(f"  Total dimension: {self.network_semi_text_dim}D")
+        print(f"\n{'='*60}")
+        print(f"Semi-Text (Hybrid) Representation Configuration")
+        print(f"{'='*60}")
+        print(f"Numerical features: {numerical_dims}D")
+        print(f"  - Resource: {self.num_res} × 3 = {self.num_res * 3}D")
+        print(f"  - Job slots: {self.num_nw} × ({self.num_res} + 3) = {self.num_nw * (self.num_res + 3)}D")
+        print(f"  - Backlog: 1D")
+        print(f"  - Running: 1D")
+        print(f"  - Temporal: 2D")
+        print(f"\nText embeddings (all-mpnet-base-v2): {text_dims}D")
+        print(f"  - {num_text_parts} parts × {embedding_dim}D each")
+        print(f"\nTotal dimension: {self.network_semi_text_dim}D")
+        print(f"  = {numerical_dims}D (numerical) + {text_dims}D (text)")
+        print(f"{'='*60}")
 
     def compute_dependent_parameters(self):
         assert self.backlog_size % self.time_horizon == 0  # such that it can be converted into an image
@@ -191,3 +199,25 @@ class Parameters:
         self._compute_text_dim()
         self._compute_semi_text_dim()
         self.network_output_dim = self.num_nw + 1  # + 1 for void action
+
+
+# Test the parameter computation
+if __name__ == '__main__':
+    print("Testing Parameters with updated text representation")
+    print("=" * 70)
+    
+    pa = Parameters()
+    pa.compute_dependent_parameters()
+    
+    print(f"\n\nSummary of all representations:")
+    print(f"{'='*70}")
+    print(f"Image representation:        {pa.network_input_height * pa.network_input_width}D")
+    print(f"Feature extraction:          {pa.network_feature_dim}D")
+    print(f"Text representation:         {pa.network_text_dim}D")
+    print(f"Semi-text (hybrid):          {pa.network_semi_text_dim}D")
+    print(f"Compact representation:      {pa.network_compact_dim}D")
+    print(f"{'='*70}")
+    
+    print("\n✓ Parameters configured successfully!")
+    print(f"✓ Text representation uses all-mpnet-base-v2 (768D embeddings)")
+    print(f"✓ 4 comprehensive prompts: {pa.network_text_dim}D total")

@@ -17,10 +17,15 @@ class Env:
         self.end = end  # termination type, 'no_new_job' or 'all_done'
 
         if self.repre == 'text':
+            # Import the new text encoder (without cache)
+            from text_observe_representation import TextObservationEncoder
             self.text_encoder = TextObservationEncoder()
-            print(f"Text encoder initialized with {self.text_encoder.embedding_dim}D embeddings")
+            print(f"Text encoder initialized: {self.text_encoder.model_name}")
+            print(f"Embedding dimension: {self.text_encoder.embedding_dim}D")
+            print(f"Total state dimension: {4 * self.text_encoder.embedding_dim}D (4 prompts)")
         
         if self.repre == 'semi_text':
+            from semi_text_observe_representation import SemiTextObservationEncoder
             self.semi_text_encoder = SemiTextObservationEncoder()
             print(f"Semi-text encoder initialized with {self.semi_text_encoder.embedding_dim}D text embeddings")
 
