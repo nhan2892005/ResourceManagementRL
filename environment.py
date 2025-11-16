@@ -19,7 +19,7 @@ class Env:
         if self.repre == 'text':
             # Import the new text encoder (without cache)
             from text_observe_representation import TextObservationEncoder
-            self.text_encoder = TextObservationEncoder()
+            self.text_encoder = TextObservationEncoder(cache_size=10000)
             print(f"Text encoder initialized: {self.text_encoder.model_name}")
             print(f"Embedding dimension: {self.text_encoder.embedding_dim}D")
             print(f"Total state dimension: {4 * self.text_encoder.embedding_dim}D (4 prompts)")
