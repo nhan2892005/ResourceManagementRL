@@ -6,23 +6,6 @@ import job_distribution
 import slow_down_cdf
 from RLBrain_Pytorch import Policy_gradient as RL_brain
 
-def init_accums(pg_learner):  # in rmsprop
-    accums = []
-    params = pg_learner.get_params()
-    for param in params:
-        accum = np.zeros(param.shape, dtype=param.dtype)
-        accums.append(accum)
-    return accums
-
-
-def rmsprop_updates_outside(grads, params, accums, stepsize, rho=0.9, epsilon=1e-9):
-
-    assert len(grads) == len(params)
-    assert len(grads) == len(accums)
-    for dim in range(len(grads)):
-        accums[dim] = rho * accums[dim] + (1 - rho) * grads[dim] ** 2
-        params[dim] += (stepsize * grads[dim] / np.sqrt(accums[dim] + epsilon))
-
 
 def discount(x, gamma):
     """
@@ -51,7 +34,6 @@ def get_traj(agent, env, episode_max_length):
     ob = env.observe()
 
     for _ in range(episode_max_length):
-
         loss = 0
         a = agent.choose_action(ob)
 
@@ -217,29 +199,13 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
     elif repre == 'feature_extract':
         n_features = pa.network_feature_dim
         print(f"Feature extraction representation: {n_features} features")
-        print(f"  - Resource features: {pa.num_res * 5}")
-        print(f"  - Job slot features: {pa.num_nw * (pa.num_res + 4)}")
-        print(f"  - Backlog features: 3")
-        print(f"  - Running features: 2")
-        print(f"  - Temporal features: 2")
+
     elif repre == 'text':
         n_features = pa.network_text_dim
-        num_desc = pa.num_nw + 4
-        embedding_dim = 384
         print(f"Text representation: {n_features} features")
-        print(f"  - Number of descriptions: {num_desc}")
-        print(f"  - Embedding dimension: {embedding_dim}")
-        print(f"  - Total: {num_desc} x {embedding_dim} = {n_features}")
     elif repre == 'semi_text':
         n_features = pa.network_semi_text_dim
-        numerical_dims = (pa.num_res * 3 +
-                         pa.num_nw * (pa.num_res + 3) +
-                         1 + 1 + 2)
-        text_dims = (pa.num_nw + 3) * 384
         print(f"Semi-text (hybrid) representation: {n_features} features")
-        print(f"  - Numerical features: {numerical_dims}D")
-        print(f"  - Text embeddings: {text_dims}D ({pa.num_nw + 3} parts × 384D)")
-        print(f"  - Total: {numerical_dims} + {text_dims} = {n_features}")
     else:
         n_features = pa.network_compact_dim
         print(f"Compact representation: {n_features} features")
@@ -250,6 +216,14 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
 
     if pg_resume is not None:
         rl.load_data(pg_resume)
+
+    # Get text encoder reference if using text representation
+    text_encoder = None
+    if repre == 'text' and hasattr(envs[0], 'text_encoder'):
+        text_encoder = envs[0].text_encoder
+        print(f"\n✓ Text encoder detected - cache logging enabled")
+        print(f"  Cache file: {text_encoder.cache_file}")
+        print(f"  Log file: {text_encoder.log_file}")
 
     # --------------------------------------
     print("Preparing for reference data...")
@@ -268,6 +242,10 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
     timer_start = time.time()
 
     for iteration in range(1, pa.num_epochs):
+        
+        # Start epoch for text encoder
+        if text_encoder is not None:
+            text_encoder.start_epoch(iteration)
 
         ex_indices = list(range(pa.num_ex))
         np.random.shuffle(ex_indices)
@@ -297,9 +275,7 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
             ex_counter += 1
 
             if ex_counter >= pa.batch_size or ex == pa.num_ex - 1:
-
                 print("\n\n")
-
                 ex_counter = 0
 
         timer_end = time.time()
@@ -315,6 +291,10 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
         print("MeanLen: \t %s +- %s" % (np.mean(eplenlist), np.std(eplenlist)))
         print("Elapsed time\t %s" % (timer_end - timer_start), "seconds")
         print("-----------------")
+
+        # End epoch for text encoder - this will print and log cache stats
+        if text_encoder is not None:
+            epoch_stats = text_encoder.end_epoch(iteration)
 
         timer_start = time.time()
 
@@ -332,6 +312,13 @@ def launch(pa, pg_resume=None, render=False, repre='image', end='no_new_job'):
             plot_lr_curve(pa.output_filename,
                           max_rew_lr_curve, mean_rew_lr_curve, slow_down_lr_curve,
                           ref_discount_rews, ref_slow_down)
+
+    # Print epoch summary at the end
+    if text_encoder is not None:
+        print("\n" + "="*80)
+        print("TRAINING COMPLETED - CACHE SUMMARY")
+        print("="*80)
+        text_encoder.print_epoch_summary()
 
 
 def main():
@@ -357,7 +344,7 @@ def main():
 
     render = False
 
-    print("\n=== Testing Text Representation ===")
+    print("\n=== Testing Text Representation with Cache Logging ===")
     launch(pa, pg_resume, render, repre='text', end='all_done')
 
 

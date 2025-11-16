@@ -18,15 +18,24 @@ class TextObservationEncoder:
     """
     Optimized encoder with caching and compact prompts.
     Speed improvements: 5-10x faster than original
+    
+    Features:
+    - Persistent cache to disk (JSON format)
+    - Detailed logging with statistics
+    - Epoch-based cache monitoring
     """
     
     def __init__(self, model_name="sentence-transformers/all-mpnet-base-v2", 
-                 cache_size=10000, use_quantization=False):
+                 cache_size=10000, use_quantization=False, 
+                 cache_file="cache/text_encoding_cache.pkl",
+                 log_file="logs/text_encoding.log"):
         """
         Args:
             model_name: SentenceTransformer model to use
             cache_size: Maximum number of cached embeddings (LRU)
             use_quantization: Use int8 quantization for faster inference (slight accuracy loss)
+            cache_file: Path to save/load cache (pickle format)
+            log_file: Path to save detailed logs
         """
         print(f"Initializing optimized TextObservationEncoder...")
         
@@ -35,25 +44,109 @@ class TextObservationEncoder:
         self.model_name = model_name
         self.cache_size = cache_size
         self.use_quantization = use_quantization
+        self.cache_file = cache_file
+        self.log_file = log_file
         
         # Cache for encoded states
         self._cache = {}
         self._cache_hits = 0
         self._cache_misses = 0
         
+        # Epoch tracking
+        self._epoch_hits = 0
+        self._epoch_misses = 0
+        self._current_epoch = 0
+        self._epoch_history = []
+        
+        # Create directories if needed
+        import os
+        os.makedirs(os.path.dirname(cache_file) if os.path.dirname(cache_file) else 'cache', exist_ok=True)
+        os.makedirs(os.path.dirname(log_file) if os.path.dirname(log_file) else 'logs', exist_ok=True)
+        
+        # Try to load existing cache
+        self._load_cache_from_disk()
+        
+        # Initialize log file
+        self._init_log_file()
+        
         # Quantization setup
         if use_quantization:
             try:
                 # Try to use half precision for faster inference
                 self.model.half()
-                print(" Using half precision (FP16) for faster inference")
+                print("✓ Using half precision (FP16) for faster inference")
             except:
-                print("âš  FP16 not available, using FP32")
+                print("⚠  FP16 not available, using FP32")
         
-        print(f" Model loaded: {model_name}")
-        print(f" Embedding dimension: {self.embedding_dim}D")
-        print(f" Cache size: {cache_size}")
-        print(f" Total state dimension: {4 * self.embedding_dim}D")
+        print(f"✓ Model loaded: {model_name}")
+        print(f"✓ Embedding dimension: {self.embedding_dim}D")
+        print(f"✓ Cache size: {cache_size}")
+        print(f"✓ Total state dimension: {4 * self.embedding_dim}D")
+        print(f"✓ Cache file: {cache_file}")
+        print(f"✓ Log file: {log_file}")
+        
+        if len(self._cache) > 0:
+            print(f"✓ Loaded {len(self._cache)} cached states from disk")
+    
+    def _init_log_file(self):
+        """Initialize log file with header"""
+        import datetime
+        with open(self.log_file, 'a') as f:
+            f.write("\n" + "="*80 + "\n")
+            f.write(f"Text Encoding Cache Log - {datetime.datetime.now()}\n")
+            f.write(f"Model: {self.model_name}\n")
+            f.write(f"Cache size limit: {self.cache_size}\n")
+            f.write("="*80 + "\n")
+    
+    def _load_cache_from_disk(self):
+        """Load cache from disk if exists"""
+        import os
+        import pickle
+        
+        if os.path.exists(self.cache_file):
+            try:
+                with open(self.cache_file, 'rb') as f:
+                    cache_data = pickle.load(f)
+                    self._cache = cache_data.get('cache', {})
+                    self._cache_hits = cache_data.get('total_hits', 0)
+                    self._cache_misses = cache_data.get('total_misses', 0)
+                    self._epoch_history = cache_data.get('epoch_history', [])
+                    
+                    # Limit cache size if loaded cache is too large
+                    if len(self._cache) > self.cache_size:
+                        # Keep most recent entries
+                        keys = list(self._cache.keys())
+                        for key in keys[:-self.cache_size]:
+                            del self._cache[key]
+                    
+                    print(f"✓ Loaded cache from {self.cache_file}")
+                    print(f"  - Cached states: {len(self._cache)}")
+                    print(f"  - Historical hits: {self._cache_hits}")
+                    print(f"  - Historical misses: {self._cache_misses}")
+            except Exception as e:
+                print(f"⚠  Failed to load cache: {e}")
+                self._cache = {}
+    
+    def _save_cache_to_disk(self):
+        """Save cache to disk"""
+        import pickle
+        
+        cache_data = {
+            'cache': self._cache,
+            'total_hits': self._cache_hits,
+            'total_misses': self._cache_misses,
+            'epoch_history': self._epoch_history,
+            'model_name': self.model_name,
+            'embedding_dim': self.embedding_dim
+        }
+        
+        try:
+            with open(self.cache_file, 'wb') as f:
+                pickle.dump(cache_data, f)
+            return True
+        except Exception as e:
+            print(f"⚠  Failed to save cache: {e}")
+            return False
     
     def encode_state(self, env):
         """
@@ -68,9 +161,11 @@ class TextObservationEncoder:
         # Check cache
         if state_key in self._cache:
             self._cache_hits += 1
+            self._epoch_hits += 1
             return self._cache[state_key]
         
         self._cache_misses += 1
+        self._epoch_misses += 1
         
         # Create compact prompts (much shorter than original)
         prompts = self._create_compact_prompts(env)
@@ -270,18 +365,154 @@ class TextObservationEncoder:
         """Return cache statistics for monitoring"""
         total = self._cache_hits + self._cache_misses
         hit_rate = self._cache_hits / total if total > 0 else 0
+        
+        epoch_total = self._epoch_hits + self._epoch_misses
+        epoch_hit_rate = self._epoch_hits / epoch_total if epoch_total > 0 else 0
+        
         return {
             'hits': self._cache_hits,
             'misses': self._cache_misses,
             'hit_rate': hit_rate,
-            'cache_size': len(self._cache)
+            'cache_size': len(self._cache),
+            'epoch_hits': self._epoch_hits,
+            'epoch_misses': self._epoch_misses,
+            'epoch_hit_rate': epoch_hit_rate,
+            'current_epoch': self._current_epoch
         }
+    
+    def start_epoch(self, epoch_num):
+        """Start a new epoch - reset epoch counters"""
+        self._current_epoch = epoch_num
+        self._epoch_hits = 0
+        self._epoch_misses = 0
+        
+        # Log epoch start
+        with open(self.log_file, 'a') as f:
+            f.write(f"\n[Epoch {epoch_num}] Started\n")
+    
+    def end_epoch(self, epoch_num=None):
+        """
+        End current epoch - log statistics and save cache.
+        
+        Args:
+            epoch_num: Optional epoch number (uses current if not provided)
+        
+        Returns:
+            dict: Epoch statistics
+        """
+        if epoch_num is None:
+            epoch_num = self._current_epoch
+        
+        # Calculate statistics
+        epoch_total = self._epoch_hits + self._epoch_misses
+        epoch_hit_rate = self._epoch_hits / epoch_total if epoch_total > 0 else 0
+        
+        total = self._cache_hits + self._cache_misses
+        overall_hit_rate = self._cache_hits / total if total > 0 else 0
+        
+        epoch_stats = {
+            'epoch': epoch_num,
+            'epoch_hits': self._epoch_hits,
+            'epoch_misses': self._epoch_misses,
+            'epoch_total': epoch_total,
+            'epoch_hit_rate': epoch_hit_rate,
+            'cache_size': len(self._cache),
+            'overall_hits': self._cache_hits,
+            'overall_misses': self._cache_misses,
+            'overall_hit_rate': overall_hit_rate
+        }
+        
+        # Store in history
+        self._epoch_history.append(epoch_stats)
+        
+        # Log to file
+        import datetime
+        with open(self.log_file, 'a') as f:
+            f.write(f"[Epoch {epoch_num}] Completed - {datetime.datetime.now()}\n")
+            f.write(f"  Epoch Stats:\n")
+            f.write(f"    - Hits:      {self._epoch_hits:6d}\n")
+            f.write(f"    - Misses:    {self._epoch_misses:6d}\n")
+            f.write(f"    - Total:     {epoch_total:6d}\n")
+            f.write(f"    - Hit Rate:  {epoch_hit_rate*100:6.2f}%\n")
+            f.write(f"  Overall Stats:\n")
+            f.write(f"    - Total Hits:    {self._cache_hits:8d}\n")
+            f.write(f"    - Total Misses:  {self._cache_misses:8d}\n")
+            f.write(f"    - Overall Rate:  {overall_hit_rate*100:6.2f}%\n")
+            f.write(f"    - Cache Size:    {len(self._cache):6d} / {self.cache_size}\n")
+            f.write("-" * 80 + "\n")
+        
+        # Print to console
+        print(f"\n{'='*80}")
+        print(f"Text Encoding Cache Stats - Epoch {epoch_num}")
+        print(f"{'='*80}")
+        print(f"Epoch Performance:")
+        print(f"  Hits:      {self._epoch_hits:6d}  ({epoch_hit_rate*100:.1f}%)")
+        print(f"  Misses:    {self._epoch_misses:6d}")
+        print(f"  Total:     {epoch_total:6d}")
+        print(f"\nOverall Performance:")
+        print(f"  Total Hits:    {self._cache_hits:8d}")
+        print(f"  Total Misses:  {self._cache_misses:8d}")
+        print(f"  Hit Rate:      {overall_hit_rate*100:.2f}%")
+        print(f"  Cache Usage:   {len(self._cache):6d} / {self.cache_size}  ({len(self._cache)/self.cache_size*100:.1f}%)")
+        print(f"{'='*80}\n")
+        
+        # Save cache to disk
+        print(f"Saving cache to {self.cache_file}...", end=" ")
+        if self._save_cache_to_disk():
+            print("✓ Done")
+        else:
+            print("✗ Failed")
+        
+        return epoch_stats
+    
+    def get_epoch_history(self):
+        """Get history of all epochs"""
+        return self._epoch_history
+    
+    def print_epoch_summary(self):
+        """Print a summary of all epochs"""
+        if not self._epoch_history:
+            print("No epoch history available")
+            return
+        
+        print(f"\n{'='*80}")
+        print(f"EPOCH HISTORY SUMMARY ({len(self._epoch_history)} epochs)")
+        print(f"{'='*80}")
+        print(f"{'Epoch':>6} | {'Hits':>8} | {'Misses':>8} | {'Total':>8} | {'Hit Rate':>10} | {'Cache Size':>11}")
+        print("-" * 80)
+        
+        for stats in self._epoch_history:
+            print(f"{stats['epoch']:6d} | "
+                  f"{stats['epoch_hits']:8d} | "
+                  f"{stats['epoch_misses']:8d} | "
+                  f"{stats['epoch_total']:8d} | "
+                  f"{stats['epoch_hit_rate']*100:9.2f}% | "
+                  f"{stats['cache_size']:11d}")
+        
+        # Calculate averages
+        avg_hit_rate = np.mean([s['epoch_hit_rate'] for s in self._epoch_history])
+        avg_cache_size = np.mean([s['cache_size'] for s in self._epoch_history])
+        
+        print("-" * 80)
+        print(f"{'Average':>6} | {' ':>8} | {' ':>8} | {' ':>8} | "
+              f"{avg_hit_rate*100:9.2f}% | {avg_cache_size:11.0f}")
+        print(f"{'='*80}\n")
     
     def clear_cache(self):
         """Clear the cache (useful for testing)"""
         self._cache.clear()
         self._cache_hits = 0
         self._cache_misses = 0
+        self._epoch_hits = 0
+        self._epoch_misses = 0
+        self._current_epoch = 0
+        self._epoch_history = []
+        
+        # Log cache clear
+        import datetime
+        with open(self.log_file, 'a') as f:
+            f.write(f"\n[CACHE CLEARED] - {datetime.datetime.now()}\n")
+            f.write("-" * 80 + "\n")
 
 
 class BatchTextObservationEncoder(TextObservationEncoder):
